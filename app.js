@@ -100,7 +100,7 @@ function calculate() {
   lastResult = {
     name: goalNameEl.value.trim() || 'Untitled goal',
     income, target, periodValue, periodUnit,
-    perDay, perMonth, percentOfIncome, level, levelLabel
+    perDay, perMonth, percentOfIncome, level, levelLabel, advice
   };
 
   renderResult(lastResult);
@@ -125,7 +125,7 @@ function renderResult(r) {
   `;
 
   resultAdvice.textContent =
-    `That's about ${r.percentOfIncome.toFixed(1)}% of your monthly income — ${r.advice}`;
+    `That's about ${r.percentOfIncome.toFixed(1)}% of your monthly income — ${r.advice || ''}`;
 }
 
 // ---------- Update the savings jar graphic ----------
