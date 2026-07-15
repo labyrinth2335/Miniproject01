@@ -153,7 +153,7 @@ select:focus {
 
 select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%233B5449'%3E%3Cpath d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%233B5449' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%233B5449'%3E%3Cpath d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%233B5449' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 34px;
