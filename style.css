@@ -20,9 +20,9 @@
   --radius-md: 14px;
   --radius-sm: 9px;
 
-  --font-display: "Fraunces", serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Geist", sans-serif;
+  --font-body: "Geist", sans-serif;
+  --font-mono: "Geist Mono", monospace;
 }
 
 * { box-sizing: border-box; }
