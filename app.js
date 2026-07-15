@@ -109,23 +109,27 @@ function calculate() {
 
 // ---------- Render the result box ----------
 function renderResult(r) {
-  resultBox.className = 'result-box result-' + r.level;
+  // Diagnostic log to help debug missing advice issues
+  console.log('renderResult r =', r);
 
-  resultHeadline.textContent = `${r.levelLabel}`;
+  resultBox.className = 'result-box result-' + (r.level || 'empty');
+
+  resultHeadline.textContent = `${r.levelLabel || 'Result'}`;
 
   resultNumbers.innerHTML = `
     <div class="stat">
       <p class="stat-label">Save per day</p>
-      <p class="stat-value">${formatMoney(r.perDay)}</p>
+      <p class="stat-value">${isFinite(r.perDay) ? formatMoney(r.perDay) : '—'}</p>
     </div>
     <div class="stat">
       <p class="stat-label">Save per month</p>
-      <p class="stat-value">${formatMoney(r.perMonth)}</p>
+      <p class="stat-value">${isFinite(r.perMonth) ? formatMoney(r.perMonth) : '—'}</p>
     </div>
   `;
 
-  resultAdvice.textContent =
-    `That's about ${r.percentOfIncome.toFixed(1)}% of your monthly income — ${r.advice || ''}`;
+  const pct = Number.isFinite(r.percentOfIncome) ? r.percentOfIncome.toFixed(1) : '—';
+  const adviceText = r.advice ? r.advice : 'No advice available for these inputs.';
+  resultAdvice.textContent = `That's about ${pct}% of your monthly income — ${adviceText}`;
 }
 
 // ---------- Update the savings jar graphic ----------
