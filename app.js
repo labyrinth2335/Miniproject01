@@ -1,5 +1,18 @@
 // ============ Savings Jar — Financial Helper ============
-// Grab all the elements we need
+const SUPABASE_URL = "https://svutthflxepdyirsgyho.supabase.co";
+const SUPABASE_KEY = "sb_publishable_IJ1IAfZxU_lGVB8m2ZB_MA_oCj7tejz";
+
+let supabaseClient = null;
+
+function initSupabase() {
+  if (window.supabase) {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  } else {
+    console.error("Supabase CDN failed to load.");
+  }
+}
+
+// Grab DOM Elements
 const goalNameEl   = document.getElementById('goalName');
 const incomeEl     = document.getElementById('income');
 const targetEl     = document.getElementById('targetAmount');
@@ -22,28 +35,23 @@ const jarPercentLabel= document.getElementById('jarPercentLabel');
 const historyList  = document.getElementById('historyList');
 const historyEmpty = document.getElementById('historyEmpty');
 
-const STORAGE_KEY = 'financialHelperGoals';
-
-// Holds the most recent calculation, used when "Save Goal" is clicked
 let lastResult = null;
 
-// ---------- Number formatting helper ----------
 function formatMoney(num) {
   return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
-// ---------- Convert any period into days and months ----------
 function toDaysAndMonths(value, unit) {
   let days;
   if (unit === 'days') days = value;
   else if (unit === 'weeks') days = value * 7;
-  else days = value * 30; // months
+  else days = value * 30;
   const months = days / 30;
   return { days, months };
 }
 
-// ---------- Main calculation ----------
 function calculate() {
+  if (!formMsg) return;
   formMsg.textContent = '';
 
   const income = parseFloat(incomeEl.value);
@@ -51,7 +59,6 @@ function calculate() {
   const periodValue = parseFloat(periodValEl.value);
   const periodUnit = periodUnitEl.value;
 
-  // Validate inputs
   if (!income || income <= 0) {
     formMsg.textContent = 'Please enter a valid monthly income.';
     return;
@@ -71,7 +78,6 @@ function calculate() {
   const perMonth = target / months;
   const percentOfIncome = (perMonth / income) * 100;
 
-  // Classify difficulty level with if / else
   let level, levelLabel, advice;
 
   if (perMonth > income) {
@@ -85,7 +91,7 @@ function calculate() {
   } else if (percentOfIncome < 25) {
     level = 'medium';
     levelLabel = 'Moderate, doable with planning';
-    advice = 'You will need to set aside roughly 10–25% of your income. Track daily spending so you don\u2019t fall behind.';
+    advice = 'You will need to set aside roughly 10–25% of your income. Track daily spending so you don’t fall behind.';
   } else if (percentOfIncome <= 50) {
     level = 'hard';
     levelLabel = 'Challenging, needs strong discipline';
@@ -96,7 +102,6 @@ function calculate() {
     advice = 'This uses more than half your income. Consider a longer timeline or an additional source of income.';
   }
 
-  // Store the latest result for the Save button
   lastResult = {
     name: goalNameEl.value.trim() || 'Untitled goal',
     income, target, periodValue, periodUnit,
@@ -107,33 +112,32 @@ function calculate() {
   updateJar(percentOfIncome, level);
 }
 
-// ---------- Render the result box ----------
 function renderResult(r) {
-  // Diagnostic log to help debug missing advice issues
-  console.log('renderResult r =', r);
-
+  if (!resultBox) return;
   resultBox.className = 'result-box result-' + (r.level || 'empty');
 
-  resultHeadline.textContent = `${r.levelLabel || 'Result'}`;
+  if (resultHeadline) resultHeadline.textContent = `${r.levelLabel || 'Result'}`;
 
-  resultNumbers.innerHTML = `
-    <div class="stat">
-      <p class="stat-label">Save per day</p>
-      <p class="stat-value">${isFinite(r.perDay) ? formatMoney(r.perDay) : '—'}</p>
-    </div>
-    <div class="stat">
-      <p class="stat-label">Save per month</p>
-      <p class="stat-value">${isFinite(r.perMonth) ? formatMoney(r.perMonth) : '—'}</p>
-    </div>
-  `;
+  if (resultNumbers) {
+    resultNumbers.innerHTML = `
+      <div class="stat">
+        <p class="stat-label">Save per day</p>
+        <p class="stat-value">${isFinite(r.perDay) ? formatMoney(r.perDay) : '—'}</p>
+      </div>
+      <div class="stat">
+        <p class="stat-label">Save per month</p>
+        <p class="stat-value">${isFinite(r.perMonth) ? formatMoney(r.perMonth) : '—'}</p>
+      </div>
+    `;
+  }
 
   const pct = Number.isFinite(r.percentOfIncome) ? r.percentOfIncome.toFixed(1) : '—';
   const adviceText = r.advice ? r.advice : 'No advice available for these inputs.';
-  resultAdvice.textContent = `That's about ${pct}% of your monthly income — ${adviceText}`;
+  if (resultAdvice) resultAdvice.textContent = `That's about ${pct}% of your monthly income — ${adviceText}`;
 }
 
-// ---------- Update the savings jar graphic ----------
 function updateJar(percent, level) {
+  if (!jarFill || !jarPercentLabel) return;
   const clamped = Math.max(0, Math.min(percent, 100));
   const jarTop = 12, jarBottom = 140;
   const maxHeight = jarBottom - jarTop;
@@ -153,38 +157,68 @@ function updateJar(percent, level) {
   jarPercentLabel.textContent = clamped.toFixed(0) + '% of income';
 }
 
-// ---------- Save the current goal to localStorage ----------
-function saveGoal() {
-  if (!lastResult) {
-    formMsg.textContent = 'Please click Calculate before saving a goal.';
-    return;
-  }
-  const goals = loadGoals();
-  goals.unshift({ ...lastResult, id: Date.now() });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(goals));
-  formMsg.style.color = 'var(--easy)';
-  formMsg.textContent = 'Goal saved successfully.';
-  renderHistory();
-
-  setTimeout(() => {
-    formMsg.textContent = '';
-    formMsg.style.color = 'var(--danger)';
-  }, 2500);
-}
-
-// ---------- Load goals from localStorage ----------
-function loadGoals() {
+// Supabase DB operations
+async function loadGoals() {
+  if (!supabaseClient) return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
+    const { data, error } = await supabaseClient
+      .from('Goals')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching goals:', error.message);
+      return [];
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Unexpected error:', err);
     return [];
   }
 }
 
-// ---------- Render the saved-goals history list ----------
-function renderHistory() {
-  const goals = loadGoals();
+async function saveGoal() {
+  if (!lastResult) {
+    if (formMsg) formMsg.textContent = 'Please click Calculate before saving a goal.';
+    return;
+  }
+
+  if (!supabaseClient) {
+    if (formMsg) formMsg.textContent = 'Database connection error.';
+    return;
+  }
+
+  const { error } = await supabaseClient
+    .from('Goals')
+    .insert([ lastResult ]);
+
+  if (error) {
+    console.error('Error saving:', error.message);
+    if (formMsg) {
+      formMsg.style.color = 'var(--danger)';
+      formMsg.textContent = 'Error saving data: ' + error.message;
+    }
+    return;
+  }
+
+  if (formMsg) {
+    formMsg.style.color = 'var(--easy)';
+    formMsg.textContent = 'Goal saved successfully!';
+  }
+
+  await renderHistory();
+
+  setTimeout(() => {
+    if (formMsg) {
+      formMsg.textContent = '';
+      formMsg.style.color = 'var(--danger)';
+    }
+  }, 2500);
+}
+
+async function renderHistory() {
+  if (!historyList || !historyEmpty) return;
+  const goals = await loadGoals();
   historyList.innerHTML = '';
 
   if (goals.length === 0) {
@@ -200,61 +234,66 @@ function renderHistory() {
     danger: 'var(--danger)'
   };
 
-  goals.forEach(g => {
-    const li = document.createElement('li');
-    li.className = 'history-item';
-    li.innerHTML = `
+  historyList.innerHTML = goals.map(g => `
+    <li class="history-item">
       <div class="history-main">
         <span class="tag" style="background:${dotColor[g.level] || 'var(--easy)'}"></span>
-        <span class="history-name">${escapeHtml(g.name)}</span>
-        <span class="history-detail">${formatMoney(g.perMonth)}/mo · ${g.levelLabel}</span>
+        <span class="history-name">${escapeHtml(g.name || 'Untitled Goal')}</span>
+        <span class="history-detail">${formatMoney(g.perMonth || 0)}/mo · ${g.levelLabel || ''}</span>
       </div>
       <button class="history-del" data-id="${g.id}">Delete</button>
-    `;
-    historyList.appendChild(li);
-  });
+    </li>
+  `).join('');
 
-  // Bind delete buttons after rendering (simple event delegation)
   historyList.querySelectorAll('.history-del').forEach(btn => {
-    btn.addEventListener('click', () => deleteGoal(Number(btn.dataset.id)));
+    btn.addEventListener('click', () => deleteGoal(btn.dataset.id));
   });
 }
 
-function deleteGoal(id) {
-  const goals = loadGoals().filter(g => g.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(goals));
-  renderHistory();
+async function deleteGoal(id) {
+  if (!supabaseClient) return;
+  const { error } = await supabaseClient
+    .from('Goals')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting:', error.message);
+    return;
+  }
+
+  await renderHistory();
 }
 
-// ---------- Prevent HTML injection from the goal name ----------
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
 
-// ---------- Reset the form ----------
 function clearForm() {
-  goalNameEl.value = '';
-  incomeEl.value = '';
-  targetEl.value = '';
-  periodValEl.value = '';
-  periodUnitEl.value = 'months';
-  formMsg.textContent = '';
+  if (goalNameEl) goalNameEl.value = '';
+  if (incomeEl) incomeEl.value = '';
+  if (targetEl) targetEl.value = '';
+  if (periodValEl) periodValEl.value = '';
+  if (periodUnitEl) periodUnitEl.value = 'months';
+  if (formMsg) formMsg.textContent = '';
 
   lastResult = null;
-  resultBox.className = 'result-box result-empty';
-  resultHeadline.textContent = 'Fill in the form and click Calculate to see your savings plan.';
-  resultNumbers.innerHTML = '';
-  resultAdvice.textContent = '';
+  if (resultBox) resultBox.className = 'result-box result-empty';
+  if (resultHeadline) resultHeadline.textContent = 'Fill in the form and click Calculate to see your savings plan.';
+  if (resultNumbers) resultNumbers.innerHTML = '';
+  if (resultAdvice) resultAdvice.textContent = '';
   updateJar(0, 'easy');
 }
 
-// ---------- Event bindings ----------
-calcBtn.addEventListener('click', calculate);
-saveBtn.addEventListener('click', saveGoal);
-clearBtn.addEventListener('click', clearForm);
+// Bind Events
+if (calcBtn) calcBtn.addEventListener('click', calculate);
+if (saveBtn) saveBtn.addEventListener('click', saveGoal);
+if (clearBtn) clearBtn.addEventListener('click', clearForm);
 
-// ---------- Initial render on page load ----------
-updateJar(0, 'easy');
-renderHistory();
+document.addEventListener('DOMContentLoaded', () => {
+  initSupabase();
+  updateJar(0, 'easy');
+  renderHistory();
+});
