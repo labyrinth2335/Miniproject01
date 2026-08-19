@@ -1,18 +1,20 @@
 // ============ Savings Jar — Financial Helper ============
-const SUPABASE_URL = "https://svutthflxepdyirsgyho.supabase.co";
+// 1. Supabase Connection Setup
+const SUPABASE_URL = "https://svutthflxepdyirsgyho.supabase.co"; // Crucial: No /rest/v1/ at the end!
 const SUPABASE_KEY = "sb_publishable_IJ1IAfZxU_lGVB8m2ZB_MA_oCj7tejz";
 
 let supabaseClient = null;
 
+// Initialize Supabase safely
 function initSupabase() {
   if (window.supabase) {
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   } else {
-    console.error("Supabase CDN failed to load.");
+    console.error("Supabase CDN failed to load or is taking too long.");
   }
 }
 
-// Grab DOM Elements
+// Grab all required DOM elements
 const goalNameEl   = document.getElementById('goalName');
 const incomeEl     = document.getElementById('income');
 const targetEl     = document.getElementById('targetAmount');
@@ -35,21 +37,25 @@ const jarPercentLabel= document.getElementById('jarPercentLabel');
 const historyList  = document.getElementById('historyList');
 const historyEmpty = document.getElementById('historyEmpty');
 
+// Holds the most recent calculation, used when "Save Goal" is clicked
 let lastResult = null;
 
+// ---------- Number formatting helper ----------
 function formatMoney(num) {
   return '$' + num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+// ---------- Convert any period into days and months ----------
 function toDaysAndMonths(value, unit) {
   let days;
   if (unit === 'days') days = value;
   else if (unit === 'weeks') days = value * 7;
-  else days = value * 30;
+  else days = value * 30; // months
   const months = days / 30;
   return { days, months };
 }
 
+// ---------- Main calculation ----------
 function calculate() {
   if (!formMsg) return;
   formMsg.textContent = '';
@@ -59,6 +65,7 @@ function calculate() {
   const periodValue = parseFloat(periodValEl.value);
   const periodUnit = periodUnitEl.value;
 
+  // Validate inputs
   if (!income || income <= 0) {
     formMsg.textContent = 'Please enter a valid monthly income.';
     return;
@@ -78,6 +85,7 @@ function calculate() {
   const perMonth = target / months;
   const percentOfIncome = (perMonth / income) * 100;
 
+  // Classify difficulty level
   let level, levelLabel, advice;
 
   if (perMonth > income) {
@@ -102,6 +110,7 @@ function calculate() {
     advice = 'This uses more than half your income. Consider a longer timeline or an additional source of income.';
   }
 
+  // Store the latest result for the Save button
   lastResult = {
     name: goalNameEl.value.trim() || 'Untitled goal',
     income, target, periodValue, periodUnit,
@@ -112,6 +121,7 @@ function calculate() {
   updateJar(percentOfIncome, level);
 }
 
+// ---------- Render the result box ----------
 function renderResult(r) {
   if (!resultBox) return;
   resultBox.className = 'result-box result-' + (r.level || 'empty');
@@ -136,6 +146,7 @@ function renderResult(r) {
   if (resultAdvice) resultAdvice.textContent = `That's about ${pct}% of your monthly income — ${adviceText}`;
 }
 
+// ---------- Update the savings jar graphic ----------
 function updateJar(percent, level) {
   if (!jarFill || !jarPercentLabel) return;
   const clamped = Math.max(0, Math.min(percent, 100));
@@ -157,7 +168,11 @@ function updateJar(percent, level) {
   jarPercentLabel.textContent = clamped.toFixed(0) + '% of income';
 }
 
-// Supabase DB operations
+// ========================================================
+// ---------- Supabase Database Functions ----------
+// ========================================================
+
+// 1. Fetch goals from Supabase Goals table
 async function loadGoals() {
   if (!supabaseClient) return [];
   try {
@@ -177,6 +192,7 @@ async function loadGoals() {
   }
 }
 
+// 2. Save data to Supabase Goals table
 async function saveGoal() {
   if (!lastResult) {
     if (formMsg) formMsg.textContent = 'Please click Calculate before saving a goal.';
@@ -216,6 +232,7 @@ async function saveGoal() {
   }, 2500);
 }
 
+// 3. Render history list
 async function renderHistory() {
   if (!historyList || !historyEmpty) return;
   const goals = await loadGoals();
@@ -239,7 +256,7 @@ async function renderHistory() {
       <div class="history-main">
         <span class="tag" style="background:${dotColor[g.level] || 'var(--easy)'}"></span>
         <span class="history-name">${escapeHtml(g.name || 'Untitled Goal')}</span>
-        <span class="history-detail">${formatMoney(g.perMonth || 0)}/mo · ${g.levelLabel || ''}</span>
+        <span class="history-detail">${formatMoney(g.perMonth)}/mo · ${g.levelLabel}</span>
       </div>
       <button class="history-del" data-id="${g.id}">Delete</button>
     </li>
@@ -250,6 +267,7 @@ async function renderHistory() {
   });
 }
 
+// 4. Delete goal from Supabase Goals table
 async function deleteGoal(id) {
   if (!supabaseClient) return;
   const { error } = await supabaseClient
@@ -265,12 +283,14 @@ async function deleteGoal(id) {
   await renderHistory();
 }
 
+// ---------- Prevent HTML injection from goal name ----------
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
 
+// ---------- Reset the form ----------
 function clearForm() {
   if (goalNameEl) goalNameEl.value = '';
   if (incomeEl) incomeEl.value = '';
@@ -287,11 +307,12 @@ function clearForm() {
   updateJar(0, 'easy');
 }
 
-// Bind Events
+// ---------- Bind Event Listeners ----------
 if (calcBtn) calcBtn.addEventListener('click', calculate);
 if (saveBtn) saveBtn.addEventListener('click', saveGoal);
 if (clearBtn) clearBtn.addEventListener('click', clearForm);
 
+// ---------- Initial setup on page load ----------
 document.addEventListener('DOMContentLoaded', () => {
   initSupabase();
   updateJar(0, 'easy');
